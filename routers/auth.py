@@ -10,7 +10,7 @@ from pydantic import EmailStr
 from data.auth import Token, SessionCreate
 from data.exceptions import UserNotFoundException, UserAlreadyExistsException
 from data.user import Login, User, UserCreate, UserUpdate
-from dependencies import DB, get_current_user
+from dependencies import get_current_user, get_db
 from utils import is_email_or_username
 
 router = APIRouter(
@@ -32,9 +32,9 @@ def get_password_hash(password):
 def authenticate_user(username: str, password: str):
     try:
         if is_email_or_username(username) == Login.EMAIL:
-            user = DB.get_user_by_email(email=username)
+            user = get_db().get_user_by_email(email=username)
         else:
-            user = DB.get_user_by_username(username=username)
+            user = get_db().get_user_by_username(username=username)
         if not verify_password(password, user.password):
             return None
         return User.from_user_in_db(user)
@@ -46,7 +46,7 @@ def create_access_token() -> str:
     return uuid.uuid4().hex
 
 
-@router.post('/register', tags=['auth'])
+@router.post('/register')
 async def register(
         username: Annotated[str, Form()],
         password: Annotated[str, Form()],
@@ -57,7 +57,7 @@ async def register(
     try:
 
         user.password = get_password_hash(user.password)
-        DB.create_user(user)
+        get_db().create_user(user)
         return {
             'detail': 'User created successfully'
         }
@@ -68,7 +68,7 @@ async def register(
         )
 
 
-@router.post("/token", tags=['auth'])
+@router.post("/token")
 async def login_for_access_token(
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 ) -> Token:
@@ -81,7 +81,7 @@ async def login_for_access_token(
         )
     access_token = create_access_token()
 
-    DB.create_session(SessionCreate(
+    get_db().create_session(SessionCreate(
         token=access_token,
         user_id=user.id,
         expires_at=datetime.datetime.now() + datetime.timedelta(days=30)
@@ -90,7 +90,7 @@ async def login_for_access_token(
     return Token(access_token=access_token, token_type="bearer")
 
 
-@router.get("/me/", response_model=User)
+@router.get("/me", response_model=User)
 async def read_users_me(
         current_user: Annotated[User, Depends(get_current_user)]
 ):
@@ -105,14 +105,22 @@ def update_user(
         email: Annotated[EmailStr | None, Form()] = None
 ):
     try:
-        DB.update_user(UserUpdate(
+        updated_user = get_db().update_user(UserUpdate(
             username=username,
             password=password,
             email=email,
             id=current_user.id
         ))
+
+        return User.from_user_in_db(updated_user)
+
     except UserAlreadyExistsException as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(error)
+        )
+    except UserNotFoundException as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(error)
         )

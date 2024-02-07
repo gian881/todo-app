@@ -3,19 +3,6 @@ from enum import Enum
 from pydantic import BaseModel, EmailStr
 
 
-class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
-
-
-class UserUpdate(BaseModel):
-    id: int
-    username: str | None = None
-    password: str | None = None
-    email: EmailStr | None = None
-
-
 class User(BaseModel):
     id: int
     username: str
@@ -28,6 +15,19 @@ class User(BaseModel):
             id=user.id,
             email=user.email,
         )
+
+
+class UserCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+
+class UserUpdate(BaseModel):
+    id: int
+    username: str | None = None
+    password: str | None = None
+    email: EmailStr | None = None
 
 
 class UserInDb(User):
